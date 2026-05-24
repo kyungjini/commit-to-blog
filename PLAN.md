@@ -38,12 +38,12 @@ An AI-powered developer blogging platform that converts GitHub commit histories 
 - [x] Implement error handling and timeout configurations for the LLM call
 
 ### Phase 4: "Create Blog" Feature (UI & Integration)
-- [ ] Build Sidebar layout for Repository search and Branch selection
-- [ ] Build Commit list view with checkboxes/selection logic
-- [ ] Implement "Generate AI Summary" button with loading states
-- [ ] Build the AI Summary preview panel (Markdown view)
-- [ ] Implement an Editor interface (Textarea or simple Markdown editor) to edit the generated text
-- [ ] Add "Copy to Clipboard" and "Export as Markdown (.md)" buttons for the final post
+- [x] Build Sidebar layout for Repository search and Branch selection
+- [x] Build Commit list view with checkboxes/selection logic
+- [x] Implement "Generate AI Summary" button with loading states
+- [x] Build the AI Summary preview panel (Markdown view)
+- [x] Implement an Editor interface (Textarea or simple Markdown editor) to edit the generated text
+- [x] Add "Copy to Clipboard" and "Export as Markdown (.md)" buttons for the final post
 
 ### Phase 5: Refinement & Polishing
 - [ ] Optimize UI states (Empty states for no repos or empty commit logs)

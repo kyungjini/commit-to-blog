@@ -45,6 +45,35 @@ async function apiRequest(path, token) {
   return payload
 }
 
+async function apiPost(path, body) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(payload?.error || 'API request failed')
+  }
+
+  return payload
+}
+
+function createMarkdownFilename(repository, branch) {
+  const date = new Date().toISOString().slice(0, 10)
+  const baseName = [repository, branch, date]
+    .filter(Boolean)
+    .join('-')
+    .replace(/[^a-zA-Z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+
+  return `${baseName || 'commit-blog-post'}.md`
+}
+
 function Navbar({ activeRoute, onNavigate }) {
   return (
     <header className="app-header">
@@ -96,16 +125,28 @@ function PageContainer({ children, eyebrow, title, description }) {
 function RepositorySelector({
   branches,
   commits,
+  generatedPost,
+  generationError,
+  isGeneratingPost,
   loadingBranches,
   loadingCommits,
+  onCopyPost,
+  onExportPost,
+  onGeneratePost,
   onSelectBranch,
+  onSelectCommit,
   onSelectRepo,
+  onUpdatePost,
   repositories,
   selectedBranch,
+  selectedCommitShas,
   selectedRepoFullName,
 }) {
+  const selectedCommitCount = selectedCommitShas.length
+  const canGeneratePost = selectedCommitCount > 0 && !isGeneratingPost
+
   return (
-    <section className="workspace-grid" aria-label="GitHub repository workflow">
+    <section className="workspace-grid" aria-label="Blog creation workflow">
       <div className="selector-panel">
         <label htmlFor="repository-select">Repository</label>
         <select
@@ -135,6 +176,18 @@ function RepositorySelector({
             </option>
           ))}
         </select>
+
+        <div className="selection-summary">
+          <span>{selectedCommitCount} commits selected</span>
+          <button
+            className="primary-action"
+            disabled={!canGeneratePost}
+            onClick={onGeneratePost}
+            type="button"
+          >
+            {isGeneratingPost ? 'Generating' : 'Generate AI Summary'}
+          </button>
+        </div>
       </div>
 
       <div className="commit-panel">
@@ -146,12 +199,21 @@ function RepositorySelector({
           <ul className="commit-list">
             {commits.map((commit) => (
               <li key={commit.sha}>
-                <a href={commit.url} rel="noreferrer" target="_blank">
+                <label className="commit-option">
+                  <input
+                    checked={selectedCommitShas.includes(commit.sha)}
+                    onChange={() => onSelectCommit(commit.sha)}
+                    type="checkbox"
+                  />
                   <span>{commit.shortSha}</span>
                   <strong>{commit.message.split('\n')[0]}</strong>
-                </a>
+                </label>
                 <small>
                   {commit.author} {commit.date ? `on ${commit.date.slice(0, 10)}` : ''}
+                  {' · '}
+                  <a href={commit.url} rel="noreferrer" target="_blank">
+                    View commit
+                  </a>
                 </small>
               </li>
             ))}
@@ -162,6 +224,51 @@ function RepositorySelector({
           </p>
         )}
       </div>
+
+      <div className="preview-panel">
+        <div className="panel-heading">
+          <h2>AI summary preview</h2>
+          {generatedPost && <span className="inline-status">Markdown</span>}
+        </div>
+        {generationError && <p className="error-banner compact">{generationError}</p>}
+        {generatedPost ? (
+          <pre className="markdown-preview">{generatedPost}</pre>
+        ) : (
+          <p className="empty-state">
+            Select commits and generate a summary to preview the draft.
+          </p>
+        )}
+      </div>
+
+      <div className="editor-panel">
+        <div className="panel-heading">
+          <h2>Editor</h2>
+          <div className="panel-actions">
+            <button
+              className="secondary-action compact"
+              disabled={!generatedPost}
+              onClick={onCopyPost}
+              type="button"
+            >
+              Copy
+            </button>
+            <button
+              className="secondary-action compact"
+              disabled={!generatedPost}
+              onClick={onExportPost}
+              type="button"
+            >
+              Export .md
+            </button>
+          </div>
+        </div>
+        <textarea
+          aria-label="Generated markdown editor"
+          onChange={(event) => onUpdatePost(event.target.value)}
+          placeholder="Generated markdown will appear here."
+          value={generatedPost}
+        />
+      </div>
     </section>
   )
 }
@@ -170,16 +277,25 @@ function MyBlogPage({
   authError,
   branches,
   commits,
+  generatedPost,
+  generationError,
   isAuthenticated,
+  isGeneratingPost,
   loadingBranches,
   loadingCommits,
   loadingRepos,
+  onCopyPost,
+  onExportPost,
+  onGeneratePost,
   onLogin,
   onLogout,
   onSelectBranch,
+  onSelectCommit,
   onSelectRepo,
+  onUpdatePost,
   repositories,
   selectedBranch,
+  selectedCommitShas,
   selectedRepoFullName,
   user,
 }) {
@@ -199,8 +315,8 @@ function MyBlogPage({
           <span className="metric-label">Repositories connected</span>
         </article>
         <article className="metric-card">
-          <span className="metric-value">{commits.length}</span>
-          <span className="metric-label">Commits loaded</span>
+          <span className="metric-value">{selectedCommitShas.length}</span>
+          <span className="metric-label">Commits selected</span>
         </article>
       </section>
 
@@ -209,7 +325,7 @@ function MyBlogPage({
           <h2>{isAuthenticated ? `Connected as ${user?.login}` : 'Start from GitHub'}</h2>
           <p>
             {isAuthenticated
-              ? 'Repository, branch, and commit data are available for the next generation phase.'
+              ? 'Select commits, generate a Markdown draft, then edit or export the result.'
               : 'Authorize this app to read your repositories and recent commit history.'}
           </p>
         </div>
@@ -231,12 +347,21 @@ function MyBlogPage({
         <RepositorySelector
           branches={branches}
           commits={commits}
+          generatedPost={generatedPost}
+          generationError={generationError}
+          isGeneratingPost={isGeneratingPost}
           loadingBranches={loadingBranches}
           loadingCommits={loadingCommits}
+          onCopyPost={onCopyPost}
+          onExportPost={onExportPost}
+          onGeneratePost={onGeneratePost}
           onSelectBranch={onSelectBranch}
+          onSelectCommit={onSelectCommit}
           onSelectRepo={onSelectRepo}
+          onUpdatePost={onUpdatePost}
           repositories={repositories}
           selectedBranch={selectedBranch}
+          selectedCommitShas={selectedCommitShas}
           selectedRepoFullName={selectedRepoFullName}
         />
       )}
@@ -278,12 +403,16 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [branches, setBranches] = useState([])
   const [commits, setCommits] = useState([])
+  const [generatedPost, setGeneratedPost] = useState('')
+  const [generationError, setGenerationError] = useState('')
   const [githubToken, setGithubToken] = useState(getTokenFromSession)
+  const [isGeneratingPost, setIsGeneratingPost] = useState(false)
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [loadingCommits, setLoadingCommits] = useState(false)
   const [loadingRepos, setLoadingRepos] = useState(false)
   const [repositories, setRepositories] = useState([])
   const [selectedBranch, setSelectedBranch] = useState('')
+  const [selectedCommitShas, setSelectedCommitShas] = useState([])
   const [selectedRepoFullName, setSelectedRepoFullName] = useState('')
   const [user, setUser] = useState(null)
 
@@ -379,7 +508,10 @@ function App() {
       setLoadingBranches(true)
       setBranches([])
       setCommits([])
+      setGeneratedPost('')
+      setGenerationError('')
       setSelectedBranch('')
+      setSelectedCommitShas([])
 
       try {
         const branchList = await apiRequest(
@@ -421,6 +553,7 @@ function App() {
     async function loadCommits() {
       setLoadingCommits(true)
       setCommits([])
+      setSelectedCommitShas([])
 
       try {
         const commitList = await apiRequest(
@@ -464,11 +597,77 @@ function App() {
     setAuthError('')
     setBranches([])
     setCommits([])
+    setGeneratedPost('')
+    setGenerationError('')
     setGithubToken('')
     setRepositories([])
     setSelectedBranch('')
+    setSelectedCommitShas([])
     setSelectedRepoFullName('')
     setUser(null)
+  }
+
+  function handleSelectCommit(commitSha) {
+    setSelectedCommitShas((currentShas) =>
+      currentShas.includes(commitSha)
+        ? currentShas.filter((sha) => sha !== commitSha)
+        : [...currentShas, commitSha],
+    )
+  }
+
+  async function handleGeneratePost() {
+    const selectedCommits = commits.filter((commit) =>
+      selectedCommitShas.includes(commit.sha),
+    )
+
+    if (!selectedRepo || !selectedBranch || selectedCommits.length === 0) {
+      setGenerationError('Select a repository, branch, and at least one commit')
+      return
+    }
+
+    setIsGeneratingPost(true)
+    setGenerationError('')
+
+    try {
+      const generated = await apiPost('/api/generate-post', {
+        branch: selectedBranch,
+        commits: selectedCommits,
+        repository: selectedRepo.fullName,
+      })
+
+      setGeneratedPost(generated.markdown)
+    } catch (err) {
+      setGenerationError(err.message)
+    } finally {
+      setIsGeneratingPost(false)
+    }
+  }
+
+  async function handleCopyPost() {
+    if (!generatedPost) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(generatedPost)
+      setGenerationError('')
+    } catch {
+      setGenerationError('Clipboard write failed')
+    }
+  }
+
+  function handleExportPost() {
+    if (!generatedPost) {
+      return
+    }
+
+    const blob = new Blob([generatedPost], { type: 'text/markdown;charset=utf-8' })
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = createMarkdownFilename(selectedRepo?.fullName, selectedBranch)
+    link.click()
+    URL.revokeObjectURL(objectUrl)
   }
 
   return (
@@ -481,16 +680,25 @@ function App() {
           authError={authError}
           branches={branches}
           commits={commits}
+          generatedPost={generatedPost}
+          generationError={generationError}
           isAuthenticated={isAuthenticated}
+          isGeneratingPost={isGeneratingPost}
           loadingBranches={loadingBranches}
           loadingCommits={loadingCommits}
           loadingRepos={loadingRepos}
+          onCopyPost={handleCopyPost}
+          onExportPost={handleExportPost}
+          onGeneratePost={handleGeneratePost}
           onLogin={handleLogin}
           onLogout={handleLogout}
           onSelectBranch={setSelectedBranch}
+          onSelectCommit={handleSelectCommit}
           onSelectRepo={setSelectedRepoFullName}
+          onUpdatePost={setGeneratedPost}
           repositories={repositories}
           selectedBranch={selectedBranch}
+          selectedCommitShas={selectedCommitShas}
           selectedRepoFullName={selectedRepoFullName}
           user={user}
         />
