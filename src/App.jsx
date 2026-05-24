@@ -1,5 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
+const githubTokenStorageKey = 'commit-to-blog:github-token'
+const githubStateStorageKey = 'commit-to-blog:github-state'
 
 const routes = {
   blog: {
@@ -14,6 +18,31 @@ const routes = {
 
 function getInitialRoute() {
   return window.location.hash === routes.settings.path ? 'settings' : 'blog'
+}
+
+function createOAuthState() {
+  const stateBytes = new Uint32Array(4)
+  window.crypto.getRandomValues(stateBytes)
+  return Array.from(stateBytes, (value) => value.toString(16)).join('')
+}
+
+function getTokenFromSession() {
+  return sessionStorage.getItem(githubTokenStorageKey)
+}
+
+async function apiRequest(path, token) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const payload = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(payload?.error || 'API request failed')
+  }
+
+  return payload
 }
 
 function Navbar({ activeRoute, onNavigate }) {
@@ -64,10 +93,99 @@ function PageContainer({ children, eyebrow, title, description }) {
   )
 }
 
-function MyBlogPage() {
+function RepositorySelector({
+  branches,
+  commits,
+  loadingBranches,
+  loadingCommits,
+  onSelectBranch,
+  onSelectRepo,
+  repositories,
+  selectedBranch,
+  selectedRepoFullName,
+}) {
+  return (
+    <section className="workspace-grid" aria-label="GitHub repository workflow">
+      <div className="selector-panel">
+        <label htmlFor="repository-select">Repository</label>
+        <select
+          id="repository-select"
+          onChange={(event) => onSelectRepo(event.target.value)}
+          value={selectedRepoFullName}
+        >
+          <option value="">Select a repository</option>
+          {repositories.map((repo) => (
+            <option key={repo.fullName} value={repo.fullName}>
+              {repo.fullName}
+            </option>
+          ))}
+        </select>
+
+        <label htmlFor="branch-select">Branch</label>
+        <select
+          disabled={!selectedRepoFullName || loadingBranches}
+          id="branch-select"
+          onChange={(event) => onSelectBranch(event.target.value)}
+          value={selectedBranch}
+        >
+          <option value="">{loadingBranches ? 'Loading branches' : 'Select a branch'}</option>
+          {branches.map((branch) => (
+            <option key={branch.sha} value={branch.name}>
+              {branch.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="commit-panel">
+        <div className="panel-heading">
+          <h2>Recent commits</h2>
+          {loadingCommits && <span className="inline-status">Loading</span>}
+        </div>
+        {commits.length > 0 ? (
+          <ul className="commit-list">
+            {commits.map((commit) => (
+              <li key={commit.sha}>
+                <a href={commit.url} rel="noreferrer" target="_blank">
+                  <span>{commit.shortSha}</span>
+                  <strong>{commit.message.split('\n')[0]}</strong>
+                </a>
+                <small>
+                  {commit.author} {commit.date ? `on ${commit.date.slice(0, 10)}` : ''}
+                </small>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="empty-state">
+            Select a repository and branch to preview recent commits.
+          </p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function MyBlogPage({
+  authError,
+  branches,
+  commits,
+  isAuthenticated,
+  loadingBranches,
+  loadingCommits,
+  loadingRepos,
+  onLogin,
+  onLogout,
+  onSelectBranch,
+  onSelectRepo,
+  repositories,
+  selectedBranch,
+  selectedRepoFullName,
+  user,
+}) {
   return (
     <PageContainer
-      description="Review generated drafts, track publishing readiness, and prepare commit-based stories for export."
+      description="Connect GitHub, choose a repository branch, and inspect recent commits for future blog generation."
       eyebrow="Workspace"
       title="My Blog"
     >
@@ -77,32 +195,56 @@ function MyBlogPage() {
           <span className="metric-label">Drafts ready</span>
         </article>
         <article className="metric-card">
-          <span className="metric-value">0</span>
+          <span className="metric-value">{repositories.length}</span>
           <span className="metric-label">Repositories connected</span>
         </article>
         <article className="metric-card">
-          <span className="metric-value">0</span>
-          <span className="metric-label">Posts exported</span>
+          <span className="metric-value">{commits.length}</span>
+          <span className="metric-label">Commits loaded</span>
         </article>
       </section>
 
       <section className="content-panel">
         <div>
-          <h2>Start from a repository</h2>
+          <h2>{isAuthenticated ? `Connected as ${user?.login}` : 'Start from GitHub'}</h2>
           <p>
-            GitHub authentication and commit selection will appear here in the next
-            implementation phase.
+            {isAuthenticated
+              ? 'Repository, branch, and commit data are available for the next generation phase.'
+              : 'Authorize this app to read your repositories and recent commit history.'}
           </p>
         </div>
-        <button className="primary-action" type="button" disabled>
-          Connect GitHub
-        </button>
+        {isAuthenticated ? (
+          <button className="secondary-action" onClick={onLogout} type="button">
+            Disconnect
+          </button>
+        ) : (
+          <button className="primary-action" onClick={onLogin} type="button">
+            Connect GitHub
+          </button>
+        )}
       </section>
+
+      {authError && <p className="error-banner">{authError}</p>}
+      {loadingRepos && <p className="loading-banner">Loading GitHub repositories</p>}
+
+      {isAuthenticated && (
+        <RepositorySelector
+          branches={branches}
+          commits={commits}
+          loadingBranches={loadingBranches}
+          loadingCommits={loadingCommits}
+          onSelectBranch={onSelectBranch}
+          onSelectRepo={onSelectRepo}
+          repositories={repositories}
+          selectedBranch={selectedBranch}
+          selectedRepoFullName={selectedRepoFullName}
+        />
+      )}
     </PageContainer>
   )
 }
 
-function SettingsPage() {
+function SettingsPage({ isAuthenticated }) {
   return (
     <PageContainer
       description="Prepare the integration settings that will power GitHub access and AI blog generation."
@@ -113,9 +255,11 @@ function SettingsPage() {
         <article className="settings-row">
           <div>
             <h2>GitHub OAuth</h2>
-            <p>Client configuration will be connected during Phase 2.</p>
+            <p>Uses the backend OAuth callback and session storage token state.</p>
           </div>
-          <span className="status-pill">Pending</span>
+          <span className={isAuthenticated ? 'status-pill ready' : 'status-pill'}>
+            {isAuthenticated ? 'Connected' : 'Pending'}
+          </span>
         </article>
         <article className="settings-row">
           <div>
@@ -131,23 +275,226 @@ function SettingsPage() {
 
 function App() {
   const [activeRoute, setActiveRoute] = useState(getInitialRoute)
+  const [authError, setAuthError] = useState('')
+  const [branches, setBranches] = useState([])
+  const [commits, setCommits] = useState([])
+  const [githubToken, setGithubToken] = useState(getTokenFromSession)
+  const [loadingBranches, setLoadingBranches] = useState(false)
+  const [loadingCommits, setLoadingCommits] = useState(false)
+  const [loadingRepos, setLoadingRepos] = useState(false)
+  const [repositories, setRepositories] = useState([])
+  const [selectedBranch, setSelectedBranch] = useState('')
+  const [selectedRepoFullName, setSelectedRepoFullName] = useState('')
+  const [user, setUser] = useState(null)
 
-  const activePage = useMemo(() => {
-    if (activeRoute === 'settings') {
-      return <SettingsPage />
+  const isAuthenticated = Boolean(githubToken)
+  const selectedRepo = useMemo(
+    () => repositories.find((repo) => repo.fullName === selectedRepoFullName),
+    [repositories, selectedRepoFullName],
+  )
+
+  useEffect(() => {
+    const hash = window.location.hash
+    const queryIndex = hash.indexOf('?')
+
+    if (queryIndex === -1) {
+      return
     }
 
-    return <MyBlogPage />
-  }, [activeRoute])
+    const params = new URLSearchParams(hash.slice(queryIndex + 1))
+    const token = params.get('github_token')
+    const state = params.get('state')
+    const expectedState = sessionStorage.getItem(githubStateStorageKey)
+
+    if (!token) {
+      return
+    }
+
+    if (expectedState && state !== expectedState) {
+      window.history.replaceState(null, '', routes.blog.path)
+      queueMicrotask(() => {
+        setAuthError('GitHub OAuth state validation failed')
+      })
+      return
+    }
+
+    sessionStorage.setItem(githubTokenStorageKey, token)
+    sessionStorage.removeItem(githubStateStorageKey)
+    window.history.replaceState(null, '', routes.blog.path)
+    queueMicrotask(() => {
+      setGithubToken(token)
+      setAuthError('')
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!githubToken) {
+      return
+    }
+
+    let isCurrent = true
+
+    async function loadGitHubAccount() {
+      setLoadingRepos(true)
+      setAuthError('')
+
+      try {
+        const [profile, repoList] = await Promise.all([
+          apiRequest('/api/github/user', githubToken),
+          apiRequest('/api/github/repos', githubToken),
+        ])
+
+        if (!isCurrent) {
+          return
+        }
+
+        setUser(profile)
+        setRepositories(repoList)
+      } catch (err) {
+        if (isCurrent) {
+          setAuthError(err.message)
+        }
+      } finally {
+        if (isCurrent) {
+          setLoadingRepos(false)
+        }
+      }
+    }
+
+    loadGitHubAccount()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [githubToken])
+
+  useEffect(() => {
+    if (!githubToken || !selectedRepo) {
+      return
+    }
+
+    let isCurrent = true
+
+    async function loadBranches() {
+      setLoadingBranches(true)
+      setBranches([])
+      setCommits([])
+      setSelectedBranch('')
+
+      try {
+        const branchList = await apiRequest(
+          `/api/github/repos/${selectedRepo.owner}/${selectedRepo.name}/branches`,
+          githubToken,
+        )
+
+        if (!isCurrent) {
+          return
+        }
+
+        setBranches(branchList)
+        setSelectedBranch(selectedRepo.defaultBranch || branchList[0]?.name || '')
+      } catch (err) {
+        if (isCurrent) {
+          setAuthError(err.message)
+        }
+      } finally {
+        if (isCurrent) {
+          setLoadingBranches(false)
+        }
+      }
+    }
+
+    loadBranches()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [githubToken, selectedRepo])
+
+  useEffect(() => {
+    if (!githubToken || !selectedRepo || !selectedBranch) {
+      return
+    }
+
+    let isCurrent = true
+
+    async function loadCommits() {
+      setLoadingCommits(true)
+      setCommits([])
+
+      try {
+        const commitList = await apiRequest(
+          `/api/github/repos/${selectedRepo.owner}/${selectedRepo.name}/commits?branch=${encodeURIComponent(selectedBranch)}`,
+          githubToken,
+        )
+
+        if (isCurrent) {
+          setCommits(commitList)
+        }
+      } catch (err) {
+        if (isCurrent) {
+          setAuthError(err.message)
+        }
+      } finally {
+        if (isCurrent) {
+          setLoadingCommits(false)
+        }
+      }
+    }
+
+    loadCommits()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [githubToken, selectedBranch, selectedRepo])
 
   function handleNavigate(routeKey) {
     setActiveRoute(routeKey)
   }
 
+  function handleLogin() {
+    const state = createOAuthState()
+    sessionStorage.setItem(githubStateStorageKey, state)
+    window.location.href = `${apiBaseUrl}/api/auth/github/login?state=${state}`
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem(githubTokenStorageKey)
+    setAuthError('')
+    setBranches([])
+    setCommits([])
+    setGithubToken('')
+    setRepositories([])
+    setSelectedBranch('')
+    setSelectedRepoFullName('')
+    setUser(null)
+  }
+
   return (
     <div className="app-shell">
       <Navbar activeRoute={activeRoute} onNavigate={handleNavigate} />
-      {activePage}
+      {activeRoute === 'settings' ? (
+        <SettingsPage isAuthenticated={isAuthenticated} />
+      ) : (
+        <MyBlogPage
+          authError={authError}
+          branches={branches}
+          commits={commits}
+          isAuthenticated={isAuthenticated}
+          loadingBranches={loadingBranches}
+          loadingCommits={loadingCommits}
+          loadingRepos={loadingRepos}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
+          onSelectBranch={setSelectedBranch}
+          onSelectRepo={setSelectedRepoFullName}
+          repositories={repositories}
+          selectedBranch={selectedBranch}
+          selectedRepoFullName={selectedRepoFullName}
+          user={user}
+        />
+      )}
       <Footer />
     </div>
   )

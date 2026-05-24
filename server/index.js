@@ -1,7 +1,6 @@
 import app from './app.js'
+import { config } from './config/env.js'
 
-const port = process.env.PORT || 3001
-
-app.listen(port, () => {
-  console.log(`API server listening on port ${port}`)
+app.listen(config.port, () => {
+  console.log(`API server listening on port ${config.port}`)
 })

@@ -24,12 +24,12 @@ An AI-powered developer blogging platform that converts GitHub commit histories 
 - [x] Implement global theme/CSS variables matching the design mockups
 
 ### Phase 2: GitHub Authentication & API Integration
-- [ ] Configure GitHub OAuth application settings
-- [ ] Implement backend route for GitHub login and access token exchange
-- [ ] Create frontend authentication state management (save token in Session/LocalStorage)
-- [ ] Build backend service to fetch authenticated user's repositories
-- [ ] Build backend service to fetch branches for a selected repository
-- [ ] Build backend service to fetch recent commits for a selected branch
+- [x] Configure GitHub OAuth application settings
+- [x] Implement backend route for GitHub login and access token exchange
+- [x] Create frontend authentication state management (save token in Session/LocalStorage)
+- [x] Build backend service to fetch authenticated user's repositories
+- [x] Build backend service to fetch branches for a selected repository
+- [x] Build backend service to fetch recent commits for a selected branch
 
 ### Phase 3: Gemini API Integration & Prompt Engineering
 - [ ] Set up Gemini API client on the backend
