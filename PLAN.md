@@ -18,10 +18,10 @@ An AI-powered developer blogging platform that converts GitHub commit histories 
 ## Implementation Checklist
 
 ### Phase 1: Project Initialization & Base Layout
-- [ ] Initialize Vite + React project and configure basic routing (My Blog, Settings)
-- [ ] Set up Express backend server
-- [ ] Create shared UI components: Navbar, Footer, and Page containers
-- [ ] Implement global theme/CSS variables matching the design mockups
+- [x] Initialize Vite + React project and configure basic routing (My Blog, Settings)
+- [x] Set up Express backend server
+- [x] Create shared UI components: Navbar, Footer, and Page containers
+- [x] Implement global theme/CSS variables matching the design mockups
 
 ### Phase 2: GitHub Authentication & API Integration
 - [ ] Configure GitHub OAuth application settings

@@ -1,121 +1,155 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useMemo, useState } from 'react'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+const routes = {
+  blog: {
+    label: 'My Blog',
+    path: '#/blog',
+  },
+  settings: {
+    label: 'Settings',
+    path: '#/settings',
+  },
+}
 
+function getInitialRoute() {
+  return window.location.hash === routes.settings.path ? 'settings' : 'blog'
+}
+
+function Navbar({ activeRoute, onNavigate }) {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <header className="app-header">
+      <a className="brand" href={routes.blog.path} onClick={() => onNavigate('blog')}>
+        <span className="brand-mark" aria-hidden="true">
+          C
+        </span>
+        <span>Commit to Blog</span>
+      </a>
+      <nav className="nav-links" aria-label="Primary navigation">
+        {Object.entries(routes).map(([routeKey, route]) => (
+          <a
+            aria-current={activeRoute === routeKey ? 'page' : undefined}
+            className={activeRoute === routeKey ? 'active' : ''}
+            href={route.path}
+            key={routeKey}
+            onClick={() => onNavigate(routeKey)}
+          >
+            {route.label}
+          </a>
+        ))}
+      </nav>
+    </header>
+  )
+}
+
+function Footer() {
+  return (
+    <footer className="app-footer">
+      <span>Smart Blog MVP</span>
+      <span>GitHub commits to structured engineering posts</span>
+    </footer>
+  )
+}
+
+function PageContainer({ children, eyebrow, title, description }) {
+  return (
+    <main className="page-container">
+      <section className="page-heading">
+        <p className="eyebrow">{eyebrow}</p>
+        <h1>{title}</h1>
+        <p>{description}</p>
+      </section>
+      {children}
+    </main>
+  )
+}
+
+function MyBlogPage() {
+  return (
+    <PageContainer
+      description="Review generated drafts, track publishing readiness, and prepare commit-based stories for export."
+      eyebrow="Workspace"
+      title="My Blog"
+    >
+      <section className="dashboard-grid" aria-label="Blog workflow overview">
+        <article className="metric-card">
+          <span className="metric-value">0</span>
+          <span className="metric-label">Drafts ready</span>
+        </article>
+        <article className="metric-card">
+          <span className="metric-value">0</span>
+          <span className="metric-label">Repositories connected</span>
+        </article>
+        <article className="metric-card">
+          <span className="metric-value">0</span>
+          <span className="metric-label">Posts exported</span>
+        </article>
+      </section>
+
+      <section className="content-panel">
         <div>
-          <h1>Get started</h1>
+          <h2>Start from a repository</h2>
           <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+            GitHub authentication and commit selection will appear here in the next
+            implementation phase.
           </p>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
+        <button className="primary-action" type="button" disabled>
+          Connect GitHub
         </button>
       </section>
+    </PageContainer>
+  )
+}
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
+function SettingsPage() {
+  return (
+    <PageContainer
+      description="Prepare the integration settings that will power GitHub access and AI blog generation."
+      eyebrow="Configuration"
+      title="Settings"
+    >
+      <section className="settings-list" aria-label="Application settings">
+        <article className="settings-row">
+          <div>
+            <h2>GitHub OAuth</h2>
+            <p>Client configuration will be connected during Phase 2.</p>
+          </div>
+          <span className="status-pill">Pending</span>
+        </article>
+        <article className="settings-row">
+          <div>
+            <h2>Gemini API</h2>
+            <p>Generation credentials will be configured during Phase 3.</p>
+          </div>
+          <span className="status-pill">Pending</span>
+        </article>
       </section>
+    </PageContainer>
+  )
+}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+function App() {
+  const [activeRoute, setActiveRoute] = useState(getInitialRoute)
+
+  const activePage = useMemo(() => {
+    if (activeRoute === 'settings') {
+      return <SettingsPage />
+    }
+
+    return <MyBlogPage />
+  }, [activeRoute])
+
+  function handleNavigate(routeKey) {
+    setActiveRoute(routeKey)
+  }
+
+  return (
+    <div className="app-shell">
+      <Navbar activeRoute={activeRoute} onNavigate={handleNavigate} />
+      {activePage}
+      <Footer />
+    </div>
   )
 }
 
