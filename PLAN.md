@@ -32,10 +32,10 @@ An AI-powered developer blogging platform that converts GitHub commit histories 
 - [x] Build backend service to fetch recent commits for a selected branch
 
 ### Phase 3: Gemini API Integration & Prompt Engineering
-- [ ] Set up Gemini API client on the backend
-- [ ] Design and test the system prompt for transforming commit diffs/messages into blog posts
-- [ ] Create backend API endpoint (`/api/generate-post`) that accepts commit data and returns AI summary
-- [ ] Implement error handling and timeout configurations for the LLM call
+- [x] Set up Gemini API client on the backend
+- [x] Design and test the system prompt for transforming commit diffs/messages into blog posts
+- [x] Create backend API endpoint (`/api/generate-post`) that accepts commit data and returns AI summary
+- [x] Implement error handling and timeout configurations for the LLM call
 
 ### Phase 4: "Create Blog" Feature (UI & Integration)
 - [ ] Build Sidebar layout for Repository search and Branch selection

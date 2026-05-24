@@ -4,6 +4,11 @@ const defaultPort = 3001
 
 export const config = {
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    requestTimeoutMs: Number(process.env.GEMINI_REQUEST_TIMEOUT_MS || 30000),
+  },
   github: {
     callbackUrl:
       process.env.GITHUB_CALLBACK_URL ||
@@ -13,6 +18,16 @@ export const config = {
     scope: process.env.GITHUB_OAUTH_SCOPE || 'repo',
   },
   port: process.env.PORT || defaultPort,
+}
+
+export function validateGeminiConfig() {
+  const missingKeys = []
+
+  if (!config.gemini.apiKey) {
+    missingKeys.push('GEMINI_API_KEY')
+  }
+
+  return missingKeys
 }
 
 export function validateGitHubOAuthConfig() {
