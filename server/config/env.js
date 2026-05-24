@@ -43,3 +43,19 @@ export function validateGitHubOAuthConfig() {
 
   return missingKeys
 }
+
+export function readPublicConfigStatus() {
+  return {
+    clientOrigin: config.clientOrigin,
+    gemini: {
+      configured: validateGeminiConfig().length === 0,
+      model: config.gemini.model,
+      timeoutMs: config.gemini.requestTimeoutMs,
+    },
+    github: {
+      callbackUrl: config.github.callbackUrl,
+      configured: validateGitHubOAuthConfig().length === 0,
+      scope: config.github.scope,
+    },
+  }
+}

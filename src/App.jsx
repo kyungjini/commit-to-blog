@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Component, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
 const githubTokenStorageKey = 'commit-to-blog:github-token'
 const githubStateStorageKey = 'commit-to-blog:github-state'
 
@@ -31,10 +31,9 @@ function getTokenFromSession() {
 }
 
 async function apiRequest(path, token) {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+  const response = await fetch(`${apiBaseUrl}${path}`, { headers }).catch(() => {
+    throw new Error('Backend API is unavailable. Start it with npm run server.')
   })
   const payload = await response.json().catch(() => null)
 
@@ -52,6 +51,8 @@ async function apiPost(path, body) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+  }).catch(() => {
+    throw new Error('Backend API is unavailable. Start it with npm run server.')
   })
   const payload = await response.json().catch(() => null)
 
@@ -60,6 +61,38 @@ async function apiPost(path, body) {
   }
 
   return payload
+}
+
+async function readConfigStatus() {
+  return apiRequest('/api/config/status')
+}
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <main className="page-container">
+          <section className="content-panel error-panel">
+            <div>
+              <h1>Something went wrong</h1>
+              <p>Refresh the page and try again. If the issue repeats, restart both local servers.</p>
+            </div>
+          </section>
+        </main>
+      )
+    }
+
+    return this.props.children
+  }
 }
 
 function createMarkdownFilename(repository, branch) {
@@ -144,6 +177,8 @@ function RepositorySelector({
 }) {
   const selectedCommitCount = selectedCommitShas.length
   const canGeneratePost = selectedCommitCount > 0 && !isGeneratingPost
+  const repoSelectedWithoutBranches = selectedRepoFullName && branches.length === 0 && !loadingBranches
+  const branchSelectedWithoutCommits = selectedBranch && commits.length === 0 && !loadingCommits
 
   return (
     <section className="workspace-grid" aria-label="Blog creation workflow">
@@ -220,8 +255,13 @@ function RepositorySelector({
           </ul>
         ) : (
           <p className="empty-state">
-            Select a repository and branch to preview recent commits.
+            {branchSelectedWithoutCommits
+              ? 'No recent commits were found for this branch.'
+              : 'Select a repository and branch to preview recent commits.'}
           </p>
+        )}
+        {repoSelectedWithoutBranches && (
+          <p className="empty-state compact">No branches were found for this repository.</p>
         )}
       </div>
 
@@ -299,6 +339,8 @@ function MyBlogPage({
   selectedRepoFullName,
   user,
 }) {
+  const hasNoRepositories = isAuthenticated && !loadingRepos && repositories.length === 0 && !authError
+
   return (
     <PageContainer
       description="Connect GitHub, choose a repository branch, and inspect recent commits for future blog generation."
@@ -342,6 +384,11 @@ function MyBlogPage({
 
       {authError && <p className="error-banner">{authError}</p>}
       {loadingRepos && <p className="loading-banner">Loading GitHub repositories</p>}
+      {hasNoRepositories && (
+        <p className="empty-state standalone">
+          No repositories were returned for this GitHub account. Confirm the OAuth scope and repository access.
+        </p>
+      )}
 
       {isAuthenticated && (
         <RepositorySelector
@@ -369,7 +416,10 @@ function MyBlogPage({
   )
 }
 
-function SettingsPage({ isAuthenticated }) {
+function SettingsPage({ configError, configStatus, isAuthenticated }) {
+  const githubConfigured = configStatus?.github?.configured
+  const geminiConfigured = configStatus?.gemini?.configured
+
   return (
     <PageContainer
       description="Prepare the integration settings that will power GitHub access and AI blog generation."
@@ -377,21 +427,24 @@ function SettingsPage({ isAuthenticated }) {
       title="Settings"
     >
       <section className="settings-list" aria-label="Application settings">
+        {configError && <p className="error-banner compact">{configError}</p>}
         <article className="settings-row">
           <div>
             <h2>GitHub OAuth</h2>
-            <p>Uses the backend OAuth callback and session storage token state.</p>
+            <p>{configStatus?.github?.callbackUrl || 'Waiting for backend config status.'}</p>
           </div>
-          <span className={isAuthenticated ? 'status-pill ready' : 'status-pill'}>
-            {isAuthenticated ? 'Connected' : 'Pending'}
+          <span className={githubConfigured ? 'status-pill ready' : 'status-pill'}>
+            {isAuthenticated ? 'Connected' : githubConfigured ? 'Ready' : 'Missing env'}
           </span>
         </article>
         <article className="settings-row">
           <div>
             <h2>Gemini API</h2>
-            <p>Generation credentials will be configured during Phase 3.</p>
+            <p>{configStatus ? `Model: ${configStatus.gemini.model}` : 'Waiting for backend config status.'}</p>
           </div>
-          <span className="status-pill">Pending</span>
+          <span className={geminiConfigured ? 'status-pill ready' : 'status-pill'}>
+            {geminiConfigured ? 'Ready' : 'Missing env'}
+          </span>
         </article>
       </section>
     </PageContainer>
@@ -403,6 +456,8 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [branches, setBranches] = useState([])
   const [commits, setCommits] = useState([])
+  const [configError, setConfigError] = useState('')
+  const [configStatus, setConfigStatus] = useState(null)
   const [generatedPost, setGeneratedPost] = useState('')
   const [generationError, setGenerationError] = useState('')
   const [githubToken, setGithubToken] = useState(getTokenFromSession)
@@ -421,6 +476,31 @@ function App() {
     () => repositories.find((repo) => repo.fullName === selectedRepoFullName),
     [repositories, selectedRepoFullName],
   )
+
+  useEffect(() => {
+    let isCurrent = true
+
+    async function loadConfigStatus() {
+      try {
+        const status = await readConfigStatus()
+
+        if (isCurrent) {
+          setConfigStatus(status)
+          setConfigError('')
+        }
+      } catch (err) {
+        if (isCurrent) {
+          setConfigError(err.message)
+        }
+      }
+    }
+
+    loadConfigStatus()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [])
 
   useEffect(() => {
     const hash = window.location.hash
@@ -586,10 +666,22 @@ function App() {
     setActiveRoute(routeKey)
   }
 
-  function handleLogin() {
-    const state = createOAuthState()
-    sessionStorage.setItem(githubStateStorageKey, state)
-    window.location.href = `${apiBaseUrl}/api/auth/github/login?state=${state}`
+  async function handleLogin() {
+    try {
+      const status = await readConfigStatus()
+
+      if (!status.github.configured) {
+        setAuthError('Missing GitHub OAuth configuration. Check GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.')
+        return
+      }
+
+      const state = createOAuthState()
+      sessionStorage.setItem(githubStateStorageKey, state)
+      setAuthError('')
+      window.location.href = `${apiBaseUrl}/api/auth/github/login?state=${state}`
+    } catch (err) {
+      setAuthError(err.message)
+    }
   }
 
   function handleLogout() {
@@ -627,6 +719,7 @@ function App() {
 
     setIsGeneratingPost(true)
     setGenerationError('')
+    setGeneratedPost('')
 
     try {
       const generated = await apiPost('/api/generate-post', {
@@ -671,40 +764,46 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
-      <Navbar activeRoute={activeRoute} onNavigate={handleNavigate} />
-      {activeRoute === 'settings' ? (
-        <SettingsPage isAuthenticated={isAuthenticated} />
-      ) : (
-        <MyBlogPage
-          authError={authError}
-          branches={branches}
-          commits={commits}
-          generatedPost={generatedPost}
-          generationError={generationError}
-          isAuthenticated={isAuthenticated}
-          isGeneratingPost={isGeneratingPost}
-          loadingBranches={loadingBranches}
-          loadingCommits={loadingCommits}
-          loadingRepos={loadingRepos}
-          onCopyPost={handleCopyPost}
-          onExportPost={handleExportPost}
-          onGeneratePost={handleGeneratePost}
-          onLogin={handleLogin}
-          onLogout={handleLogout}
-          onSelectBranch={setSelectedBranch}
-          onSelectCommit={handleSelectCommit}
-          onSelectRepo={setSelectedRepoFullName}
-          onUpdatePost={setGeneratedPost}
-          repositories={repositories}
-          selectedBranch={selectedBranch}
-          selectedCommitShas={selectedCommitShas}
-          selectedRepoFullName={selectedRepoFullName}
-          user={user}
-        />
-      )}
-      <Footer />
-    </div>
+    <ErrorBoundary>
+      <div className="app-shell">
+        <Navbar activeRoute={activeRoute} onNavigate={handleNavigate} />
+        {activeRoute === 'settings' ? (
+          <SettingsPage
+            configError={configError}
+            configStatus={configStatus}
+            isAuthenticated={isAuthenticated}
+          />
+        ) : (
+          <MyBlogPage
+            authError={authError}
+            branches={branches}
+            commits={commits}
+            generatedPost={generatedPost}
+            generationError={generationError}
+            isAuthenticated={isAuthenticated}
+            isGeneratingPost={isGeneratingPost}
+            loadingBranches={loadingBranches}
+            loadingCommits={loadingCommits}
+            loadingRepos={loadingRepos}
+            onCopyPost={handleCopyPost}
+            onExportPost={handleExportPost}
+            onGeneratePost={handleGeneratePost}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            onSelectBranch={setSelectedBranch}
+            onSelectCommit={handleSelectCommit}
+            onSelectRepo={setSelectedRepoFullName}
+            onUpdatePost={setGeneratedPost}
+            repositories={repositories}
+            selectedBranch={selectedBranch}
+            selectedCommitShas={selectedCommitShas}
+            selectedRepoFullName={selectedRepoFullName}
+            user={user}
+          />
+        )}
+        <Footer />
+      </div>
+    </ErrorBoundary>
   )
 }
 

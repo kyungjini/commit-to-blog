@@ -1,5 +1,6 @@
 import express from 'express'
 import authRoutes from './routes/authRoutes.js'
+import configRoutes from './routes/configRoutes.js'
 import generatePostRoutes from './routes/generatePostRoutes.js'
 import githubRoutes from './routes/githubRoutes.js'
 import healthRoutes from './routes/healthRoutes.js'
@@ -10,6 +11,7 @@ const app = express()
 app.use(applyCors)
 app.use(express.json({ limit: '1mb' }))
 app.use('/api/auth', authRoutes)
+app.use('/api/config', configRoutes)
 app.use('/api/generate-post', generatePostRoutes)
 app.use('/api/github', githubRoutes)
 app.use('/api/health', healthRoutes)

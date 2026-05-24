@@ -46,6 +46,6 @@ An AI-powered developer blogging platform that converts GitHub commit histories 
 - [x] Add "Copy to Clipboard" and "Export as Markdown (.md)" buttons for the final post
 
 ### Phase 5: Refinement & Polishing
-- [ ] Optimize UI states (Empty states for no repos or empty commit logs)
-- [ ] Add input validation and structured error boundaries
-- [ ] Review and clean up environment variables (.env setup)
+- [x] Optimize UI states (Empty states for no repos or empty commit logs)
+- [x] Add input validation and structured error boundaries
+- [x] Review and clean up environment variables (.env setup)

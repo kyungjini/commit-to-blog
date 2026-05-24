@@ -123,6 +123,10 @@
   padding: 28px;
 }
 
+.error-panel {
+  margin-top: 48px;
+}
+
 .primary-action {
   flex: 0 0 auto;
   min-height: 42px;
@@ -327,6 +331,18 @@
 .commit-list small,
 .empty-state {
   color: var(--text-muted);
+}
+
+.empty-state.compact {
+  margin-top: 12px;
+}
+
+.empty-state.standalone {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
 
 .preview-panel,
